@@ -1,0 +1,532 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>doomBOX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* ──────────────────────────────────────────────────────────
+   doomBOX — field console for an ESP32 RF toolkit.
+   Layout: a single scrolling "console log" column, 760px max,
+   left-aligned like a terminal session, broken by full-width
+   cards and a faint animated scanline/grid field behind
+   everything. One commitment: dark only, neon-cyan signal,
+   bright-red reserved for alerts/brand sparks — never decor.
+   ────────────────────────────────────────────────────────── */
+:root{
+  --bg:        #060a0d;
+  --bg-raised: #0b1217;
+  --bg-inset:  #040607;
+  --line:      rgba(72,232,228,0.18);
+  --line-soft: rgba(72,232,228,0.09);
+  --fg:        #d8f6f3;
+  --fg-dim:    #85a7a4;
+  --fg-faint:  #4d6664;
+  --cyan:      #38f2e6;
+  --cyan-soft: #1fb9b0;
+  --red:       #ff3b4e;
+  --red-soft:  rgba(255,59,78,0.14);
+  --font-display: 'Share Tech Mono', 'Courier New', monospace;
+  --font-body:    'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+  color-scheme: dark;
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+}
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } }
+html,body{ height:auto; }
+body{
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height:1.6;
+  margin:0;
+  padding-left: max(16px, env(safe-area-inset-left,0px));
+  padding-right: max(16px, env(safe-area-inset-right,0px));
+  position:relative;
+  overflow-x:hidden;
+}
+
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 900px 500px at 15% -5%, rgba(56,242,230,0.10), transparent 60%),
+    radial-gradient(ellipse 700px 500px at 100% 20%, rgba(255,59,78,0.05), transparent 55%),
+    repeating-linear-gradient(to bottom, rgba(56,242,230,0.025) 0px, rgba(56,242,230,0.025) 1px, transparent 1px, transparent 3px);
+  animation: drift 14s linear infinite;
+}
+@keyframes drift{ 0%{ background-position: 0 0, 0 0, 0 0; } 100%{ background-position: 0 0, 0 0, 0 -120px; } }
+
+a{ color:var(--cyan); }
+code, pre, .mono{ font-family:var(--font-mono); }
+
+.wrap{ position:relative; z-index:1; max-width:760px; margin:0 auto; padding-block: 28px 80px; }
+
+/* ── nav ── */
+.topnav{
+  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; gap:14px;
+  padding:12px 0;
+  background: linear-gradient(to bottom, rgba(6,10,13,0.97) 75%, transparent);
+  backdrop-filter: blur(2px);
+}
+.logo-slot{
+  width:34px; height:34px; flex:none;
+  border:1px dashed var(--line);
+  border-radius:4px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--font-mono); font-size:8px; letter-spacing:0.5px;
+  color:var(--fg-faint);
+}
+.brand{ font-family:var(--font-display); font-size:15px; letter-spacing:1px; color:var(--cyan); text-shadow:0 0 10px rgba(56,242,230,0.5); }
+.brand small{ color:var(--fg-faint); font-family:var(--font-body); font-size:11px; letter-spacing:0.5px; margin-left:4px; }
+.navlinks{ margin-left:auto; display:flex; gap:16px; font-family:var(--font-mono); font-size:11.5px; }
+.navlinks a{ color:var(--fg-dim); text-decoration:none; white-space:nowrap; }
+.navlinks a:hover{ color:var(--cyan); }
+.navlinks{ overflow-x:auto; scrollbar-width:none; }
+.navlinks::-webkit-scrollbar{ display:none; }
+
+/* ── hero ── */
+.hero{ padding-block: 46px 10px; }
+.eyebrow{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:2.5px; text-transform:uppercase;
+  color:var(--cyan-soft); display:flex; align-items:center; gap:8px; margin-bottom:16px;
+}
+.eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:pulse 2.2s ease-in-out infinite; }
+@keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.35; } }
+h1.title{
+  font-family:var(--font-display); font-size:clamp(38px,9vw,64px); line-height:1;
+  margin:0 0 18px; letter-spacing:-0.5px; text-wrap:balance;
+  color:var(--fg);
+  text-shadow: 0 0 22px rgba(56,242,230,0.35);
+}
+h1.title .glyph{ color:var(--cyan); }
+.lede{ font-size:17px; color:var(--fg-dim); max-width:56ch; margin:0 0 6px; }
+.lede b{ color:var(--fg); font-weight:600; }
+.fork-note{ font-size:13px; color:var(--fg-faint); margin:10px 0 26px; }
+.fork-note a{ color:var(--fg-dim); border-bottom:1px solid var(--line); text-decoration:none; }
+.fork-note a:hover{ color:var(--cyan); border-color:var(--cyan); }
+
+.cta-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.btn{
+  font-family:var(--font-mono); font-size:13px; letter-spacing:0.3px;
+  padding:11px 18px; border-radius:3px; text-decoration:none;
+  display:inline-flex; align-items:center; gap:8px;
+  transition:transform .15s ease, box-shadow .15s ease;
+}
+.btn:hover{ transform:translateY(-1px); }
+.btn-primary{ background:var(--cyan); color:#01201e; font-weight:700; box-shadow:0 0 0 1px rgba(56,242,230,0.4), 0 6px 24px rgba(56,242,230,0.18); }
+.btn-primary:hover{ box-shadow:0 0 0 1px var(--cyan), 0 10px 30px rgba(56,242,230,0.3); }
+.btn-ghost{ background:transparent; color:var(--fg); border:1px solid var(--line); }
+.btn-ghost:hover{ border-color:var(--cyan); color:var(--cyan); }
+.ico{ width:14px; height:14px; flex:none; vertical-align:-2px; }
+
+/* ── section shell ── */
+section{ padding-block: 46px 4px; border-top:1px solid var(--line-soft); scroll-margin-top:66px; }
+section:first-of-type{ border-top:none; }
+.sec-head{ display:flex; align-items:baseline; gap:10px; margin-bottom:18px; }
+.sec-num{ font-family:var(--font-mono); font-size:12px; color:var(--fg-faint); }
+h2{ font-family:var(--font-display); font-size:22px; letter-spacing:0.3px; margin:0; color:var(--fg); }
+h2 .ic{ color:var(--cyan); margin-right:8px; }
+.sec-intro{ color:var(--fg-dim); max-width:62ch; margin:0 0 20px; font-size:14.5px; }
+
+/* ── hardware list ── */
+.hw-list{ list-style:none; margin:0; padding:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+.hw-list li{
+  display:flex; justify-content:space-between; align-items:baseline; gap:16px;
+  padding:13px 16px; border-bottom:1px solid var(--line-soft); font-size:13.5px;
+}
+.hw-list li:last-child{ border-bottom:none; }
+.hw-list .k{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:0.5px; text-transform:uppercase; color:var(--cyan-soft); flex:none; }
+.hw-list .v{ color:var(--fg-dim); text-align:right; }
+.hw-list .v b{ color:var(--fg); font-weight:600; }
+
+/* ── tables (system overview) ── */
+.tbl-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:6px; margin-bottom:10px; }
+table{ width:100%; border-collapse:collapse; font-size:13.5px; min-width:420px; }
+th{
+  font-family:var(--font-mono); font-size:11px; letter-spacing:0.8px; text-transform:uppercase;
+  text-align:left; color:var(--cyan-soft); background:var(--bg-inset);
+  padding:10px 14px; border-bottom:1px solid var(--line);
+}
+td{ padding:10px 14px; border-bottom:1px solid var(--line-soft); color:var(--fg-dim); vertical-align:top; }
+tr:last-child td{ border-bottom:none; }
+td b, td strong{ color:var(--fg); font-weight:600; }
+td a{ color:var(--cyan); }
+
+/* ── feature cards ── */
+.feat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:14px; }
+@media (max-width:540px){ .feat-grid{ grid-template-columns:1fr; } }
+.feat-card{
+  background:var(--bg-raised); border:1px solid var(--line); border-radius:6px;
+  padding:18px 18px 16px; min-width:0;
+}
+.feat-card h3{
+  font-family:var(--font-mono); font-size:13px; letter-spacing:0.6px; text-transform:uppercase;
+  margin:0 0 12px; color:var(--fg); display:flex; align-items:center; gap:8px;
+}
+.feat-card ul{ margin:0; padding-left:18px; color:var(--fg-dim); font-size:13.5px; }
+.feat-card li{ margin-bottom:6px; }
+.feat-card li::marker{ color:var(--cyan-soft); }
+.feat-card .callout{
+  margin-top:10px; padding:8px 10px; border-left:2px solid var(--cyan-soft);
+  background:var(--bg-inset); font-size:12.5px; color:var(--fg-faint);
+}
+
+/* ── build-your-own callout ── */
+.build-card{
+  border:1px solid var(--line); border-radius:8px; padding:24px;
+  background: linear-gradient(160deg, var(--bg-raised), var(--bg-inset));
+  display:flex; justify-content:space-between; align-items:center; gap:20px; flex-wrap:wrap;
+}
+.build-card .txt h3{ font-family:var(--font-display); font-size:17px; margin:0 0 6px; color:var(--fg); }
+.build-card .txt p{ margin:0; font-size:13.5px; color:var(--fg-dim); max-width:46ch; }
+.build-card .txt code{ color:var(--cyan-soft); background:var(--bg-inset); padding:1px 5px; border-radius:3px; }
+
+/* ── diff two-col ── */
+.diff-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media (max-width:540px){ .diff-grid{ grid-template-columns:1fr; } }
+.diff-col{ border:1px solid var(--line-soft); border-radius:6px; padding:16px; min-width:0; }
+.diff-col.out{ border-left:2px solid var(--fg-faint); }
+.diff-col.in{ border-left:2px solid var(--cyan); }
+.diff-col h4{ font-family:var(--font-mono); font-size:11px; letter-spacing:1px; text-transform:uppercase; margin:0 0 10px; color:var(--fg-dim); }
+.diff-col ul{ margin:0; padding-left:18px; font-size:13px; color:var(--fg-dim); }
+.diff-col li{ margin-bottom:6px; }
+
+/* ── disclaimer (brand-red lives here) ── */
+.disclaimer{
+  border:1px solid rgba(255,59,78,0.35); background:var(--red-soft);
+  border-radius:6px; padding:20px 22px; position:relative;
+}
+.disclaimer .flag{
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--red); display:flex; align-items:center; gap:7px; margin-bottom:10px;
+}
+.disclaimer .flag::before{ content:""; width:7px; height:7px; background:var(--red); box-shadow:0 0 8px var(--red); }
+.disclaimer p{ margin:0 0 10px; color:var(--fg); font-size:14px; }
+.disclaimer p:last-child{ margin-bottom:0; }
+.disclaimer b{ color:var(--red); }
+
+/* ── license ── */
+.license-card{ border:1px solid var(--line); border-radius:6px; padding:20px 22px; }
+.license-card .badge{
+  display:inline-block; font-family:var(--font-mono); font-size:11px; letter-spacing:0.8px;
+  border:1px solid var(--cyan-soft); color:var(--cyan); padding:4px 10px; border-radius:3px; margin-bottom:14px;
+}
+.license-card p{ font-size:13.5px; color:var(--fg-dim); margin:0 0 10px; }
+.license-card p:last-child{ margin-bottom:0; }
+.chain{ font-family:var(--font-mono); font-size:12px; color:var(--fg-faint); border-left:2px solid var(--line); padding-left:12px; margin:14px 0; }
+.chain div{ margin-bottom:4px; }
+
+/* ── reaper (small, closing card) ── */
+.reaper-mini{
+  border:1px solid var(--line); border-radius:6px; padding:18px 20px;
+  display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;
+}
+.reaper-mini .txt{ font-size:13px; color:var(--fg-dim); max-width:48ch; }
+.reaper-mini .txt b{ color:var(--cyan); font-family:var(--font-mono); font-weight:400; }
+
+/* ── contact ── */
+.contact-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+@media (max-width:640px){ .contact-grid{ grid-template-columns:1fr; } }
+.contact-card{
+  display:flex; align-items:center; gap:12px;
+  border:1px solid var(--line); border-radius:6px; padding:15px;
+  background:var(--bg-raised); text-decoration:none; color:var(--fg); min-width:0;
+  transition:border-color .15s ease, transform .15s ease;
+}
+a.contact-card:hover{ border-color:var(--cyan); transform:translateY(-1px); }
+.c-icon{
+  width:36px; height:36px; flex:none; border-radius:50%;
+  border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+  color:var(--cyan);
+}
+.c-body{ min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }
+.c-label{ font-family:var(--font-mono); font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:var(--fg-faint); }
+.c-value{ font-size:13.5px; font-weight:600; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c-arrow{ color:var(--cyan-soft); flex:none; }
+.copy-btn{
+  flex:none; font-family:var(--font-mono); font-size:11px; letter-spacing:0.3px;
+  background:transparent; border:1px solid var(--line); color:var(--fg-dim);
+  padding:6px 10px; border-radius:3px; cursor:pointer; transition:border-color .15s ease, color .15s ease;
+}
+.copy-btn:hover{ border-color:var(--cyan); color:var(--cyan); }
+.copy-btn.copied{ border-color:var(--cyan); color:var(--cyan); }
+
+/* ── footer ── */
+footer{ margin-top:58px; padding-top:26px; border-top:1px solid var(--line-soft); }
+.link-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:28px; }
+@media (max-width:540px){ .link-grid{ grid-template-columns:1fr; } }
+.link-card{
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  border:1px solid var(--line); border-radius:5px; padding:13px 15px;
+  text-decoration:none; color:var(--fg); font-size:13.5px; min-width:0;
+  transition:border-color .15s ease, background .15s ease;
+}
+.link-card:hover{ border-color:var(--cyan); background:var(--bg-raised); }
+.link-card span.name{ font-weight:600; }
+.link-card span.url{ display:block; font-family:var(--font-mono); font-size:11px; color:var(--fg-faint); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.link-card .arrow{ color:var(--cyan-soft); flex:none; }
+.foot-bottom{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; font-family:var(--font-mono); font-size:11px; color:var(--fg-faint); padding-bottom: env(safe-area-inset-bottom,0px); }
+.foot-bottom a{ color:var(--fg-faint); }
+.foot-bottom a:hover{ color:var(--cyan); }
+
+::selection{ background:rgba(56,242,230,0.3); color:#fff; }
+:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<div class="wrap">
+
+  <nav class="topnav">
+    <div class="logo-slot">LOGO</div>
+    <div class="brand">doomBOX<small>💀📡</small></div>
+    <div class="navlinks">
+      <a href="#hardware">hardware</a>
+      <a href="#features">features</a>
+      <a href="#build">build</a>
+      <a href="#diff">differences</a>
+      <a href="#license">license</a>
+      <a href="#overview">overview</a>
+      <a href="#contact">contact</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span> ESP32 · WI-FI / BLE / RFID · FIELD TOOLKIT</div>
+    <h1 class="title">doom<span class="glyph">BOX</span></h1>
+    <p class="lede">A compact <b>ESP32 wireless toolkit</b> for security research and RF survey work — Wi-Fi, Bluetooth/BLE, RFID, and drone/RF detection, driven from a two-button OLED console.</p>
+    <p class="fork-note">Forked from <a href="https://github.com/jbohack/nyanBOX" target="_blank" rel="noopener">nyanBOX</a> by Nyan Devices, itself built on earlier work by CiferTech.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/RichardGladson/doomBOX" target="_blank" rel="noopener"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 6 2 10 7 14"/><polyline points="13 6 18 10 13 14"/><line x1="11.5" y1="4" x2="8.5" y2="16"/></svg>View on GitHub</a>
+    </div>
+  </header>
+
+  <section id="hardware">
+    <div class="sec-head"><span class="sec-num">01</span><h2><span class="ic">▸</span>Hardware</h2></div>
+    <p class="sec-intro">The core build — driven from an ESP32, read on a small OLED.</p>
+    <ul class="hw-list">
+      <li><span class="k">MCU</span><span class="v"><b>ESP32</b> (PlatformIO board: esp32dev)</span></li>
+      <li><span class="k">Display</span><span class="v"><b>0.96″ 128×64 OLED</b> (SSD1306, I²C / U8g2)</span></li>
+      <li><span class="k">Controls</span><span class="v"><b>5 buttons</b> — Up, Down, Center, Left, Right</span></li>
+      <li><span class="k">Status LED</span><span class="v"><b>NeoPixel / RGB</b></span></li>
+      <li><span class="k">RFID</span><span class="v"><b>MFRC522</b> on SPI (optional)</span></li>
+    </ul>
+  </section>
+
+  <section id="features">
+    <div class="sec-head"><span class="sec-num">02</span><h2><span class="ic">▸</span>Features</h2></div>
+    <p class="sec-intro">Four tool groups, split across the main menu's two columns.</p>
+    <div class="feat-grid">
+      <div class="feat-card">
+        <h3>📶 Wi-Fi</h3>
+        <ul>
+          <li>Access-point / client scanner</li>
+          <li>Deauther</li>
+          <li>Handshake capture</li>
+          <li>Client sniffer</li>
+          <li>Deauth-frame scanner</li>
+          <li>Beacon spam</li>
+          <li>Evil Portal (captive portal)</li>
+          <li>Pineapple detector</li>
+          <li>Pwnagotchi detector &amp; spam</li>
+        </ul>
+      </div>
+      <div class="feat-card">
+        <h3>🔵 Bluetooth / BLE</h3>
+        <ul>
+          <li>BLE scanner</li>
+          <li>BLE advertising inspector</li>
+          <li>doomBOX / nyanBOX detector</li>
+          <li>Flipper Zero, Axon, Meshtastic, MeshCore detectors</li>
+          <li>Bluetooth skimmer detector</li>
+          <li>AirTag detector &amp; spoofer</li>
+          <li>Samsung SmartTag, Tile, Ray-Ban Meta detectors</li>
+          <li>BLE spammer, Swift Pair spam, Sour Apple, Sour Droid, BLE spoofer</li>
+        </ul>
+      </div>
+      <div class="feat-card">
+        <h3>📡 Other / RF-related</h3>
+        <ul>
+          <li>Superscanner</li>
+          <li>Drone detector (Remote ID) &amp; drone spoofer (ODID)</li>
+          <li>Flock Safety detector</li>
+          <li>Device Scout</li>
+          <li><b style="color:var(--fg)">Reaper link</b> — ESP-NOW control of ESP32-Reaper for multi-radio passive survey</li>
+        </ul>
+      </div>
+      <div class="feat-card">
+        <h3>🏷️ RFID</h3>
+        <ul>
+          <li>MFRC522 tools (main menu, right column)</li>
+        </ul>
+        <div class="callout">Also on the main menu: a level/XP system, NeoPixel status, display mirroring, and a Snake easter egg (Konami code on About: ↑↑↓↓←→←→←→).</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="build">
+    <div class="sec-head"><span class="sec-num">03</span><h2><span class="ic">▸</span>Build it yourself</h2></div>
+    <div class="build-card">
+      <div class="txt">
+        <h3>Flash your own doomBOX</h3>
+        <p>Build steps, PlatformIO setup, libraries, and the full project layout live in the repo's <code>README</code> — everything you need to compile and flash your own unit.</p>
+      </div>
+      <a class="btn btn-primary" href="https://github.com/RichardGladson/doomBOX" target="_blank" rel="noopener"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 6 2 10 7 14"/><polyline points="13 6 18 10 13 14"/><line x1="11.5" y1="4" x2="8.5" y2="16"/></svg>Visit the repo</a>
+    </div>
+  </section>
+
+  <section id="diff">
+    <div class="sec-head"><span class="sec-num">04</span><h2><span class="ic">▸</span>Differences from stock nyanBOX</h2></div>
+    <div class="diff-grid">
+      <div class="diff-col out">
+        <h4>Not carried over</h4>
+        <ul>
+          <li>Camera detector / deauther</li>
+          <li>Passive 802.11 CSV monitor</li>
+          <li>FindMy / HID beepers</li>
+          <li>KARR</li>
+          <li>iBeacon tools</li>
+          <li>LE gear detector</li>
+          <li>Jam detector</li>
+          <li>Battery pack / enclosure</li>
+          <li>Triple-nRF24 on the same board</li>
+        </ul>
+      </div>
+      <div class="diff-col in">
+        <h4>doomBOX-specific</h4>
+        <ul>
+          <li>Focus on onboard Wi-Fi/BLE + OLED (no onboard nRF24)</li>
+          <li>RFID column</li>
+          <li>ESP-NOW Reaper integration for remote multi-radio survey</li>
+          <li>Snake easter egg, level system, legal disclaimer flow</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="disclaimer">
+    <div class="sec-head"><span class="sec-num">05</span><h2><span class="ic">▸</span>Disclaimer</h2></div>
+    <div class="disclaimer">
+      <div class="flag">Read before use</div>
+      <p>doomBOX is for <b>education, security research, and authorized testing only</b>.</p>
+      <p>Do not scan, deauth, spoof, or interfere with networks or devices you do not own or lack explicit permission to test. Follow local radio and computer-crime laws.</p>
+      <p>You are solely responsible for how you use this software and hardware; authors and contributors accept no liability for misuse.</p>
+    </div>
+  </section>
+
+  <section id="license">
+    <div class="sec-head"><span class="sec-num">06</span><h2><span class="ic">▸</span>License</h2></div>
+    <div class="license-card">
+      <div class="badge">GNU GPL v3.0 (only)</div>
+      <p>This repository is licensed under the <b style="color:var(--fg)">GNU General Public License v3.0, GPL-3.0-only</b>. The full license text is published by the Free Software Foundation at <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">gnu.org/licenses/gpl-3.0.html</a>.</p>
+      <p>doomBOX is a derivative of nyanBOX, which is itself built on earlier CiferTech work. Original upstream copyright notices are retained in source headers as required by the licenses those portions were originally released under.</p>
+      <div class="chain">
+        <div>↳ CiferTech — original work, 2022</div>
+        <div>↳ nyanBOX (jbohack) — fork, 2025</div>
+        <div>↳ doomBOX (this repo) — GPL-3.0-only</div>
+      </div>
+      <p>Questions about how upstream terms and this project's GPL-3.0-only license interact belong with the repository's own LICENSE file — treat it as the source of truth over this page.</p>
+    </div>
+  </section>
+
+  <section id="overview">
+    <div class="sec-head"><span class="sec-num">07</span><h2><span class="ic">▸</span>System overview</h2></div>
+    <p class="sec-intro">doomBOX runs fully standalone. This table is only relevant if you've also built the optional companion field node.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Role</th><th>Repo</th><th>Hardware focus</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>doomBOX</b> (this repo)</td>
+            <td><a href="https://github.com/RichardGladson/doomBOX" target="_blank" rel="noopener">RichardGladson/doomBOX</a></td>
+            <td>ESP32 + OLED UI, Wi-Fi/BLE tools, RFID</td>
+          </tr>
+          <tr>
+            <td><b>ESP32-Reaper</b></td>
+            <td><a href="https://github.com/RichardGladson/ESP32-reaper" target="_blank" rel="noopener">RichardGladson/ESP32-reaper</a></td>
+            <td>ESP32-C3 + 3× nRF24L01 field radio, passive 2.4 GHz survey, ESP-NOW slave</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul style="padding-left:18px; margin:14px 0 20px; color:var(--fg-dim); font-size:13.5px;">
+      <li><b style="color:var(--fg)">Standalone</b> — doomBOX runs all onboard Wi-Fi / BLE / RFID tools without Reaper.</li>
+      <li><b style="color:var(--fg)">With Reaper</b> — pair the remote triple-radio node over ESP-NOW; passive channel survey is offloaded to it, with results and status returning to the OLED.</li>
+    </ul>
+    <a class="btn btn-ghost" href="https://github.com/RichardGladson/ESP32-reaper" target="_blank" rel="noopener"><svg class="ico" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="1.6"/><path d="M6.5 6.5a5 5 0 0 0 0 7"/><path d="M13.5 6.5a5 5 0 0 1 0 7"/><path d="M4 4a9 9 0 0 0 0 12"/><path d="M16 4a9 9 0 0 1 0 12"/></svg>ESP32-Reaper repo ↗</a>
+  </section>
+
+  <section id="contact">
+    <div class="sec-head"><span class="sec-num">08</span><h2><span class="ic">▸</span>Get in touch</h2></div>
+    <p class="sec-intro">Questions, bug reports, or you've built your own doomBOX — reach out.</p>
+    <div class="contact-grid">
+      <a class="contact-card" href="https://github.com/RichardGladson" target="_blank" rel="noopener">
+        <span class="c-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 6 2 10 7 14"/><polyline points="13 6 18 10 13 14"/><line x1="11.5" y1="4" x2="8.5" y2="16"/></svg>
+        </span>
+        <span class="c-body"><span class="c-label">GitHub</span><span class="c-value">github.com/RichardGladson</span></span>
+        <span class="c-arrow">↗</span>
+      </a>
+      <a class="contact-card" href="https://discord.com/users/richardgladson" target="_blank" rel="noopener">
+        <span class="c-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="14" height="10" rx="3"/><path d="M3 7.5l7 4.5 7-4.5"/></svg>
+        </span>
+        <span class="c-body"><span class="c-label">Discord</span><span class="c-value">richardgladson</span></span>
+        <span class="c-arrow">↗</span>
+      </a>
+      <div class="contact-card" id="email-card">
+        <span class="c-icon">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="14" height="10" rx="2"/><path d="M3 7l7 4.5L17 7"/></svg>
+        </span>
+        <span class="c-body"><span class="c-label">Email</span><span class="c-value" id="email-text">richardgladson@gmail.com</span></span>
+        <button class="copy-btn" id="copy-email" type="button">Copy</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="foot-bottom">
+      <span>doomBOX — field console for an ESP32 toolkit.</span>
+      <span>Licensed GPL-3.0-only</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('copy-email');
+  var text = document.getElementById('email-text');
+  if(!btn || !text) return;
+  btn.addEventListener('click', function(){
+    var value = text.textContent.trim();
+    var done = function(){
+      btn.textContent = 'Copied';
+      btn.classList.add('copied');
+      setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1600);
+    };
+    try{
+      navigator.clipboard.writeText(value).then(done).catch(function(){ fallback(); });
+    }catch(e){ fallback(); }
+    function fallback(){
+      try{
+        var range = document.createRange();
+        range.selectNodeContents(text);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        done();
+      }catch(e2){ /* no-op */ }
+    }
+  });
+})();
+</script>
+
+</body></html>
